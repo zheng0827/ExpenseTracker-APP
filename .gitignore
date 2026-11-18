@@ -1,0 +1,15 @@
+# Android / Gradle
+android/.gradle/
+android/.idea/
+android/local.properties
+android/build/
+android/app/build/
+*.iml
+*.keystore
+*.jks
+
+# Sync server local SQLite data
+sync-server/data/
+node_modules/
+tsconfig.tsbuildinfo
+.DS_Store
