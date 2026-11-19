@@ -2,5 +2,7 @@
     <string name="app_name">簡記</string>
     <string name="notification_listener_label">簡記 · 消費通知自動記帳</string>
     <string name="widget_balance_label">簡記 · 收支結餘與快記 (4×2)</string>
+    <string name="widget_balance_desc">顯示本月結餘、收支與記一筆／語音／文字／拍照快捷入口</string>
     <string name="widget_quickbar_label">簡記 · 今日支出快記列 (4×1)</string>
+    <string name="widget_quickbar_desc">顯示今日支出總額與一鍵快速記帳</string>
 </resources>

@@ -35,13 +35,21 @@ import java.time.LocalDate
  */
 class QuickAddBarWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val db = LedgerDatabase.getInstance(context)
-        val prefs = SecurePrefs(context)
-        val today = LocalDate.now().toString()
-        val todayExp = db.transactionDao().getByDate(today)
-            .filter { it.type != "income" }
-            .sumOf { it.amount }
-        val currency = prefs.currency
+        var todayExp = 0.0
+        var currency = "NT$"
+
+        try {
+            val appContext = context.applicationContext ?: context
+            val db = LedgerDatabase.getInstance(appContext)
+            val prefs = SecurePrefs(appContext)
+            currency = prefs.currency
+            val today = LocalDate.now().toString()
+            todayExp = db.transactionDao().getByDate(today)
+                .filter { it.type != "income" }
+                .sumOf { it.amount }
+        } catch (_: Exception) {
+            // 避免首次新增小工具或冷啟動時拋出例外
+        }
 
         provideContent {
             Row(
@@ -52,7 +60,11 @@ class QuickAddBarWidget : GlanceAppWidget() {
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically,
             ) {
-                Column(modifier = GlanceModifier.defaultWeight()) {
+                Column(
+                    modifier = GlanceModifier
+                        .defaultWeight()
+                        .clickable(actionStartActivity<MainActivity>()),
+                ) {
                     Text(
                         text = "今日支出",
                         style = TextStyle(color = ColorProvider(Color(0xFF989FA9)), fontSize = 11.sp),

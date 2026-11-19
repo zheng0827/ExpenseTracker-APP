@@ -41,26 +41,38 @@ val WIDGET_LAUNCH_MODE_KEY = ActionParameters.Key<String>("launch_mode")
  */
 class BalanceQuickWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val db = LedgerDatabase.getInstance(context)
-        val prefs = SecurePrefs(context)
         val ym = YearMonth.now()
-        val monthTxs = db.transactionDao().getByMonth("${ym}%")
-        val income = monthTxs.filter { it.type == "income" }.sumOf { it.amount }
-        val expense = monthTxs.filter { it.type != "income" }.sumOf { it.amount }
+        var income = 0.0
+        var expense = 0.0
+        var currency = "NT$"
+
+        try {
+            val appContext = context.applicationContext ?: context
+            val db = LedgerDatabase.getInstance(appContext)
+            val prefs = SecurePrefs(appContext)
+            currency = prefs.currency
+            val monthTxs = db.transactionDao().getByMonth("${ym}%")
+            income = monthTxs.filter { it.type == "income" }.sumOf { it.amount }
+            expense = monthTxs.filter { it.type != "income" }.sumOf { it.amount }
+        } catch (_: Exception) {
+            // 避免首次新增小工具或資料庫冷啟動時擲出例外中斷桌面小工具掛載
+        }
+
         val balance = income - expense
-        val currency = prefs.currency
 
         provideContent {
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    .cornerRadius(26.dp)
+                    .cornerRadius(24.dp)
                     .background(ColorProvider(Color(0xFF17181C)))
                     .padding(14.dp),
                 verticalAlignment = Alignment.Vertical.CenterVertically,
             ) {
                 Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .clickable(actionStartActivity<MainActivity>()),
                     verticalAlignment = Alignment.Vertical.CenterVertically,
                 ) {
                     Column(modifier = GlanceModifier.defaultWeight()) {
