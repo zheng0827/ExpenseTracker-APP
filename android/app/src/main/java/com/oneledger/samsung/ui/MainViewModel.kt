@@ -87,6 +87,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedMonth.value = _selectedMonth.value.plusMonths(delta)
     }
 
+    fun setYearMonth(yearMonth: YearMonth) {
+        _selectedMonth.value = yearMonth
+    }
+
     fun refreshInsight() {
         viewModelScope.launch {
             refreshInsightInternal(transactions.value, selectedMonth.value, currency.value)

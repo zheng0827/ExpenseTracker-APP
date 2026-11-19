@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,61 +80,71 @@ fun RadialGestureFab(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier.size(58.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         if (menuOpen) {
-            val activeLabel = items.firstOrNull { it.mode == hoveredMode }?.label
-            Surface(
-                shape = RoundedCornerShape(99.dp),
-                color = Color(0xFF1C1F26),
+            Box(
                 modifier = Modifier
-                    .offset(x = (-32).dp, y = (-168).dp)
-                    .shadow(8.dp, RoundedCornerShape(99.dp)),
+                    .size(58.dp)
+                    .wrapContentSize(align = Alignment.Center, unbounded = true),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = activeLabel?.let { "放開進入：$it" } ?: "滑向任一方向或點選模式",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
-
-            items.forEach { item ->
-                val isSelected = hoveredMode == item.mode
+                val activeLabel = items.firstOrNull { it.mode == hoveredMode }?.label
                 Surface(
-                    shape = CircleShape,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                    shadowElevation = 8.dp,
+                    shape = RoundedCornerShape(99.dp),
+                    color = Color(0xFF1C1F26),
                     modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                x = with(density) { item.dxDp.dp.toPx().roundToInt() },
-                                y = with(density) { item.dyDp.dp.toPx().roundToInt() },
+                        .offset(x = (-32).dp, y = (-168).dp)
+                        .shadow(8.dp, RoundedCornerShape(99.dp)),
+                ) {
+                    Text(
+                        text = activeLabel?.let { "放開進入：$it" } ?: "滑向任一方向或點選模式",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+
+                items.forEach { item ->
+                    val isSelected = hoveredMode == item.mode
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        shadowElevation = 8.dp,
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    x = with(density) { item.dxDp.dp.toPx().roundToInt() },
+                                    y = with(density) { item.dyDp.dp.toPx().roundToInt() },
+                                )
+                            }
+                            .size(if (isSelected) 60.dp else 54.dp)
+                            .clickable {
+                                menuOpen = false
+                                hoveredMode = null
+                                onSelectMode(item.mode)
+                            },
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                imageVector = item.icon,
+                                contentDescription = item.label,
+                                tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Text(
+                                text = item.shortLabel,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             )
                         }
-                        .size(if (isSelected) 60.dp else 54.dp)
-                        .clickable {
-                            menuOpen = false
-                            hoveredMode = null
-                            onSelectMode(item.mode)
-                        },
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = item.label,
-                            tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(19.dp),
-                        )
-                        Text(
-                            text = item.shortLabel,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                        )
                     }
                 }
             }

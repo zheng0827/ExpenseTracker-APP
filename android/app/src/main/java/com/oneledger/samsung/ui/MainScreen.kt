@@ -1,5 +1,15 @@
 package com.oneledger.samsung.ui
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,23 +23,24 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,9 +63,13 @@ import com.oneledger.samsung.ui.screens.LedgerScreen
 import com.oneledger.samsung.ui.screens.PlanScreen
 import com.oneledger.samsung.ui.screens.SettingsFlowScreen
 import com.oneledger.samsung.ui.screens.StatsScreen
+import kotlinx.coroutines.delay
 
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
+    val context = LocalContext.current
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
     val transactions by viewModel.transactions.collectAsState()
     val debts by viewModel.debts.collectAsState()
     val recurringRules by viewModel.recurringRules.collectAsState()
@@ -75,7 +91,34 @@ fun MainScreen(viewModel: MainViewModel) {
     var llmSheetMode by remember { mutableStateOf<String?>(null) } // "voice" | "text" | null
     var pendingDeleteTx by remember { mutableStateOf<TransactionEntity?>(null) }
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    // 攔截返回鍵：有開啟彈窗時關閉彈窗；在次頁面時返回首頁；在首頁最後一步時兩次返回退出 App
+    BackHandler(enabled = true) {
+        when {
+            showUnifiedSheet -> {
+                showUnifiedSheet = false
+                editingTx = null
+                prefillEntry = null
+            }
+            llmSheetMode != null -> {
+                llmSheetMode = null
+            }
+            pendingDeleteTx != null -> {
+                pendingDeleteTx = null
+            }
+            activeTab != "ledger" -> {
+                activeTab = "ledger"
+            }
+            else -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressTime < 2000) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBackPressTime = now
+                    viewModel.showToast("再按一次返回以退出簡記")
+                }
+            }
+        }
+    }
 
     fun openCaptureMode(mode: String) {
         when (mode) {
@@ -102,24 +145,9 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
-    LaunchedEffect(toastMessage) {
-        toastMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearToast()
-        }
-    }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(bottom = 90.dp),
-            )
-        },
     ) { _ ->
         Box(
             modifier = Modifier
@@ -134,6 +162,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     currency = currency,
                     insightText = insightText,
                     onShiftMonth = viewModel::shiftMonth,
+                    onSelectMonth = viewModel::setYearMonth,
                     onRefreshInsight = viewModel::refreshInsight,
                     onEditTransaction = { tx ->
                         editingTx = tx
@@ -152,6 +181,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     creditCards = creditCards,
                     currency = currency,
                     onShiftMonth = viewModel::shiftMonth,
+                    onSelectMonth = viewModel::setYearMonth,
                     onEditTransaction = { tx ->
                         editingTx = tx
                         prefillEntry = null
@@ -194,6 +224,16 @@ fun MainScreen(viewModel: MainViewModel) {
                 )
             }
 
+            // 自訂三星 One UI 懸浮氣泡式 Toast（滑順彈出淡出，不佔據底欄寬度）
+            OneUiToastBubble(
+                message = toastMessage,
+                onDismiss = viewModel::clearToast,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 86.dp),
+            )
+
             // Floating Samsung One UI Bottom Dock + Radial Gesture Action Button
             Row(
                 modifier = Modifier
@@ -222,7 +262,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     }
                 }
 
-                RadialGestureFab(onSelectMode = ::openCaptureMode)
+                RadialGestureFab(
+                    onSelectMode = ::openCaptureMode,
+                    modifier = Modifier.size(58.dp),
+                )
             }
         }
     }
@@ -309,5 +352,77 @@ private fun DockItem(
             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * 自訂三星 One UI 懸浮氣泡式 Toast：
+ * - 彈簧動畫平滑進退場
+ * - 圓角膠囊黑曜玻璃半透明樣式
+ * - 居中懸浮於底欄上方，不壓迫任何導航元件
+ */
+@Composable
+fun OneUiToastBubble(
+    message: String?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = !message.isNullOrBlank(),
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        ) + fadeIn(),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium,
+            ),
+        ) + fadeOut(),
+        modifier = modifier,
+    ) {
+        if (!message.isNullOrBlank()) {
+            LaunchedEffect(message) {
+                delay(2200)
+                onDismiss()
+            }
+            Surface(
+                shape = RoundedCornerShape(99.dp),
+                color = Color(0xF0181A20),
+                shadowElevation = 10.dp,
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                    Text(
+                        text = message,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
     }
 }

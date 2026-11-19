@@ -40,40 +40,11 @@ import androidx.compose.ui.unit.sp
 import com.oneledger.samsung.data.ledger.PendingDuplicateEntity
 import com.oneledger.samsung.data.ledger.TransactionEntity
 import com.oneledger.samsung.ui.components.DonutBalanceCard
+import com.oneledger.samsung.ui.components.MonthSwitcherPill
 import com.oneledger.samsung.ui.components.SwipeableTransactionRow
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
-
-@Composable
-fun MonthSwitcherPill(
-    month: YearMonth,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(99.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-        ) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Rounded.ChevronLeft, contentDescription = "上個月", modifier = Modifier.size(18.dp))
-            }
-            Text(
-                text = "${month.year} 年 ${month.monthValue} 月",
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Rounded.ChevronRight, contentDescription = "下個月", modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
 
 fun formatDayTitle(dateStr: String): String {
     val today = LocalDate.now().toString()
@@ -95,6 +66,7 @@ fun LedgerScreen(
     currency: String,
     insightText: String,
     onShiftMonth: (Long) -> Unit,
+    onSelectMonth: (YearMonth) -> Unit,
     onRefreshInsight: () -> Unit,
     onEditTransaction: (TransactionEntity) -> Unit,
     onRequestDeleteTransaction: (TransactionEntity) -> Unit,
@@ -129,6 +101,7 @@ fun LedgerScreen(
                     month = selectedMonth,
                     onPrev = { onShiftMonth(-1) },
                     onNext = { onShiftMonth(1) },
+                    onSelectMonth = onSelectMonth,
                 )
             }
         }

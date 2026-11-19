@@ -48,6 +48,7 @@ import com.oneledger.samsung.data.ledger.CreditCardEntity
 import com.oneledger.samsung.data.ledger.TransactionEntity
 import com.oneledger.samsung.domain.Categories
 import com.oneledger.samsung.ui.components.DonutBalanceCard
+import com.oneledger.samsung.ui.components.MonthSwitcherPill
 import com.oneledger.samsung.ui.components.MonthlyBalanceLineChartCard
 import com.oneledger.samsung.ui.components.SpendingTrendChartCard
 import com.oneledger.samsung.ui.components.SwipeableTransactionRow
@@ -61,6 +62,7 @@ fun StatsScreen(
     creditCards: List<CreditCardEntity>,
     currency: String,
     onShiftMonth: (Long) -> Unit,
+    onSelectMonth: (YearMonth) -> Unit,
     onEditTransaction: (TransactionEntity) -> Unit,
     onRequestDeleteTransaction: (TransactionEntity) -> Unit,
 ) {
@@ -132,6 +134,7 @@ fun StatsScreen(
                     month = selectedMonth,
                     onPrev = { onShiftMonth(-1) },
                     onNext = { onShiftMonth(1) },
+                    onSelectMonth = onSelectMonth,
                 )
             }
         }

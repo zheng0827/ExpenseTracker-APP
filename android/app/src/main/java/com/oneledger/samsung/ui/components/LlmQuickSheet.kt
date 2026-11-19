@@ -10,6 +10,7 @@ import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,15 +22,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,7 +43,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -54,6 +63,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -62,6 +72,9 @@ import com.oneledger.samsung.domain.ParsedEntry
 import com.oneledger.samsung.ui.theme.ExpenseCoralDark
 import com.oneledger.samsung.ui.theme.IncomeGreenDark
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * 底部精簡 1/3 高度視窗：
@@ -93,6 +106,7 @@ fun LlmQuickSheet(
     }
     var analyzing by remember { mutableStateOf(false) }
     var parsed by remember { mutableStateOf<ParsedEntry?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     val recognizer = remember {
         if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
@@ -131,8 +145,18 @@ fun LlmQuickSheet(
             override fun onResults(results: Bundle?) {
                 listening = false
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) sentence = text
-                statusText = "轉錄完成，按「送出」交由 LLM 正規化分析"
+                if (!text.isNullOrBlank()) {
+                    sentence = text
+                    scope.launch {
+                        analyzing = true
+                        statusText = "已辨識語音，正在自動拆分..."
+                        parsed = onParse(text)
+                        analyzing = false
+                        statusText = "已完成自動拆分，請確認或儲存"
+                    }
+                } else {
+                    statusText = "收音結束，未識別到文字，可按「重說」或手動輸入"
+                }
             }
             override fun onPartialResults(partialResults: Bundle?) {
                 val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
@@ -203,6 +227,18 @@ fun LlmQuickSheet(
                     minLines = 2,
                     maxLines = 3,
                     shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (!analyzing && sentence.isNotBlank()) {
+                            recognizer?.stopListening()
+                            listening = false
+                            scope.launch {
+                                analyzing = true
+                                parsed = onParse(sentence)
+                                analyzing = false
+                            }
+                        }
+                    }),
                     modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -244,7 +280,7 @@ fun LlmQuickSheet(
                     ) {
                         Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(if (analyzing) "分析中..." else "送出")
+                        Text(if (analyzing) "分析拆分中..." else "送出")
                     }
                 }
             } else {
@@ -270,11 +306,23 @@ fun LlmQuickSheet(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(res.description, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text(
-                            "${res.date} · ${res.category} · ${res.paymentMethod}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.clickable { showDatePicker = true },
+                        ) {
+                            Icon(
+                                Icons.Rounded.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(11.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                "${res.date} · ${res.category} · ${res.paymentMethod}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     Text(
                         "${if (res.type == "income") "+" else "-"}$currency ${"%,.0f".format(res.amount)}",
@@ -282,6 +330,38 @@ fun LlmQuickSheet(
                         fontSize = 16.sp,
                         color = if (res.type == "income") IncomeGreenDark else MaterialTheme.colorScheme.onSurface,
                     )
+                }
+
+                if (showDatePicker) {
+                    val initialEpochMillis = remember(res.date) {
+                        try {
+                            LocalDate.parse(res.date).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+                    }
+                    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialEpochMillis)
+                    DatePickerDialog(
+                        onDismissRequest = { showDatePicker = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                datePickerState.selectedDateMillis?.let { millis ->
+                                    val picked = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                                    parsed = res.copy(date = picked.toString())
+                                }
+                                showDatePicker = false
+                            }) {
+                                Text("確定", fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDatePicker = false }) {
+                                Text("取消")
+                            }
+                        }
+                    ) {
+                        DatePicker(state = datePickerState)
+                    }
                 }
 
                 Spacer(Modifier.height(2.dp))

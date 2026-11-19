@@ -33,12 +33,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.Calculate
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -48,6 +51,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -78,7 +83,9 @@ import com.oneledger.samsung.domain.RewardCalculator
 import com.oneledger.samsung.ui.theme.ExpenseCoralDark
 import com.oneledger.samsung.ui.theme.IncomeGreenDark
 import java.io.File
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * 統一的新增與編輯視窗：
@@ -137,6 +144,7 @@ fun UnifiedEntrySheet(
     var date by remember(editingItem, prefill) {
         mutableStateOf(editingItem?.date ?: prefill?.date ?: LocalDate.now().toString())
     }
+    var showDatePicker by remember { mutableStateOf(false) }
     var photoUri by remember(editingItem) {
         mutableStateOf(editingItem?.photoUri)
     }
@@ -331,22 +339,71 @@ fun UnifiedEntrySheet(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.weight(1f),
                 )
+                val today = LocalDate.now().toString()
+                val yesterday = LocalDate.now().minusDays(1).toString()
+                val dateLabel = when (date) {
+                    today -> "今天"
+                    yesterday -> "昨天"
+                    else -> {
+                        val parts = date.split("-")
+                        if (parts.size == 3) "${parts[1].toIntOrNull() ?: 1}/${parts[2].toIntOrNull() ?: 1}" else date
+                    }
+                }
+
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.clickable {
-                        // 快速在今天與昨天切換
-                        val today = LocalDate.now().toString()
-                        val yesterday = LocalDate.now().minusDays(1).toString()
-                        date = if (date == today) yesterday else today
-                    },
+                    modifier = Modifier.clickable { showDatePicker = true },
                 ) {
-                    Text(
-                        text = if (date == LocalDate.now().toString()) "今天" else date.takeLast(5),
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.CalendarToday,
+                            contentDescription = "選擇日期",
+                            modifier = Modifier.size(13.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = dateLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+
+            if (showDatePicker) {
+                val initialEpochMillis = remember(date) {
+                    try {
+                        LocalDate.parse(date).atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                    } catch (_: Exception) {
+                        System.currentTimeMillis()
+                    }
+                }
+                val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialEpochMillis)
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val picked = Instant.ofEpochMilli(millis).atZone(ZoneId.of("UTC")).toLocalDate()
+                                date = picked.toString()
+                            }
+                            showDatePicker = false
+                        }) {
+                            Text("確定", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text("取消")
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
                 }
             }
 

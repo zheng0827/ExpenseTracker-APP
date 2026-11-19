@@ -49,6 +49,7 @@ object SmartEntryParser {
         "买" to "買", "块" to "塊", "钱" to "錢", "消费" to "消費", "缴费" to "繳費",
         "电影" to "電影", "奖金" to "獎金", "薪资" to "薪資", "回馈" to "回饋",
         "转账" to "轉帳", "悠游卡" to "悠遊卡", "之类的" to "之類的", "然后" to "然後", "刚刚" to "剛剛",
+        "早餐" to "早餐", "午餐" to "午餐", "晚餐" to "晚餐", "小吃" to "小吃",
     )
 
     private val knownMerchants = listOf(
@@ -63,6 +64,7 @@ object SmartEntryParser {
         "烏龍綠茶", "冰美式", "冰拿鐵", "漢堡", "蛋餅", "奶茶", "紅茶", "綠茶", "豆漿",
         "咖啡", "拿鐵", "美式", "吐司", "飯糰", "包子", "薯餅", "便當", "拉麵", "麵線",
         "水餃", "鍋貼", "炒飯", "火鍋", "燒肉", "沙拉", "牛奶", "雞蛋", "茶葉蛋",
+        "壽司", "麵包", "油條", "燒餅", "飯", "麵", "炸雞", "雞排", "冬瓜茶", "手搖飲",
     )
 
     fun toTraditional(raw: String): String {
@@ -71,6 +73,55 @@ object SmartEntryParser {
             if (out.contains(s)) out = out.replace(s, t)
         }
         return out
+    }
+
+    /**
+     * 支援將中文數字（如「一百八十」、「兩百」、「五十」）轉換為數值
+     */
+    fun parseChineseNumber(text: String): Double {
+        val digits = mapOf(
+            '零' to 0, '一' to 1, '二' to 2, '兩' to 2, '俩' to 2, '三' to 3,
+            '四' to 4, '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9
+        )
+        val units = mapOf('十' to 10, '百' to 100, '千' to 1000, '萬' to 10000)
+
+        var total = 0
+        var currentUnitValue = 0
+        var currentDigit = 0
+
+        for (char in text) {
+            if (char in digits) {
+                currentDigit = digits[char] ?: 0
+            } else if (char in units) {
+                val unit = units[char] ?: 1
+                if (currentDigit == 0 && unit == 10 && currentUnitValue == 0) {
+                    currentUnitValue = 10
+                } else {
+                    currentUnitValue += (if (currentDigit == 0) 1 else currentDigit) * unit
+                    currentDigit = 0
+                }
+            }
+        }
+        total += currentUnitValue + currentDigit
+        return total.toDouble()
+    }
+
+    /**
+     * 從口語或通知文字中擷取金額（優先阿拉伯數字，次取中文數字）
+     */
+    fun extractAmount(text: String): Double {
+        val arabicRegex = Regex("""(?:NT\$|TWD|\$|金額|消費|刷卡|付款成功|交易|花了|付了|收到)?\s*([\d,]+(?:\.\d+)?)\s*(?:元|塊錢|塊|台幣)?""", RegexOption.IGNORE_CASE)
+        val num = arabicRegex.findAll(text)
+            .mapNotNull { it.groupValues[1].replace(",", "").toDoubleOrNull() }
+            .firstOrNull { it > 0.0 && it < 10_000_000.0 }
+        if (num != null && num > 0.0) return num
+
+        val cnMatch = Regex("""([零一二兩俩三四五六七八九十百千萬]+)\s*(?:元|塊錢|塊|台幣)""").find(text)
+        if (cnMatch != null) {
+            val parsed = parseChineseNumber(cnMatch.groupValues[1])
+            if (parsed > 0.0) return parsed
+        }
+        return 0.0
     }
 
     suspend fun parse(rawText: String, geminiApiKey: String, sourceApp: String = ""): ParsedEntry {
@@ -162,25 +213,22 @@ object SmartEntryParser {
             else -> "現金"
         }
 
-        // Amount extraction (ignoring masked **** and dates)
+        // Amount extraction (ignoring masked **** and dates, supporting Chinese & Arabic numerals)
         val withoutDateAndMask = text
             .replace(Regex("""\d{1,2}\s*[月/\-]\s*\d{1,2}\s*[日號]?"""), " ")
             .replace(Regex("""\*+"""), " ")
-        val amtMatch = Regex("""(?:NT\$|TWD|\$|金額|消費|刷卡|付款成功|交易|花了|付了|收到)?\s*([\d,]+(?:\.\d+)?)\s*(?:元|塊錢|塊|台幣)?""", RegexOption.IGNORE_CASE)
-            .findAll(withoutDateAndMask)
-            .mapNotNull { it.groupValues[1].replace(",", "").toDoubleOrNull() }
-            .firstOrNull { it > 0.0 && it < 10_000_000.0 } ?: 0.0
+        val amtMatch = extractAmount(withoutDateAndMask)
 
         // Step 1: Extract intact merchant name first (bank notification pattern -> spoken pattern -> known brands)
         val bankMerchantRegex = Regex("""(?:於|在)\s*([^\s，,。、]{2,18}?)\s*(?:刷卡|消費|交易|付款|扣款)""")
-        val spokenMerchantRegex = Regex("""(?:去找|去|到|在|找)\s*([^，,。、\s買吃喝點搭坐]{2,12}?)(?=(?:買|吃|喝|點|消費|付|搭|坐|，|,|。|\s|$))""")
+        val spokenMerchantRegex = Regex("""(?:去找|去|到|在|向|找)\s*([^，,。、\s買吃喝點搭坐]{2,14}?)(?=(?:買|吃|喝|點|消費|付|搭|坐|花了|，|,|。|\s|\d|$))""")
 
         val merchant = bankMerchantRegex.find(text)?.groupValues?.get(1)?.trim()
             ?: knownMerchants.firstOrNull { text.contains(it, ignoreCase = true) }
             ?: spokenMerchantRegex.find(text)?.groupValues?.get(1)?.removeSuffix("的")?.trim()
             ?: ""
 
-        // Step 2: Scan remaining text (AFTER removing merchant string so "摩斯漢堡" won't trigger "漢堡"!)
+        // Step 2: Scan remaining text for items (prioritizing specific food/goods, then verb clauses)
         val remainderForItems = if (merchant.isNotEmpty()) text.replace(merchant, " ", ignoreCase = true) else text
         val items = mutableListOf<String>()
         var scanBuf = remainderForItems
@@ -188,6 +236,24 @@ object SmartEntryParser {
             if (scanBuf.contains(item)) {
                 items.add(item)
                 scanBuf = scanBuf.replace(item, " ")
+            }
+        }
+
+        // If no known items found, dynamically parse verb clauses (e.g. 買了..., 吃了..., 喝了...)
+        if (items.isEmpty()) {
+            val verbMatch = Regex("""(?:買了|吃了|喝了|點了|叫了|買|吃|喝|點|叫)\s*([^\d元塊錢，,。！\s之類]+)""").find(remainderForItems)
+            if (verbMatch != null) {
+                val rawClause = verbMatch.groupValues[1]
+                    .replace(Regex("""(之類的|什麼的|之類|然後|還有|以及|東西|一些)"""), "")
+                    .trim()
+                val subItems = rawClause.split(Regex("""(和|跟|與|加|、|，|\s+)"""))
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && it.length in 2..8 }
+                if (subItems.isNotEmpty()) {
+                    items.addAll(subItems)
+                } else if (rawClause.isNotBlank() && rawClause.length <= 12) {
+                    items.add(rawClause)
+                }
             }
         }
 

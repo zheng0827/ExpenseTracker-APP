@@ -1,5 +1,8 @@
 package com.oneledger.samsung.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -27,9 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,11 +52,12 @@ import com.oneledger.samsung.data.ledger.TransactionEntity
 import com.oneledger.samsung.domain.Categories
 import com.oneledger.samsung.ui.theme.ExpenseCoralDark
 import com.oneledger.samsung.ui.theme.IncomeGreenDark
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
 /**
- * 支援「往左滑露出編輯與刪除按鈕」的交易列（不干擾直向捲動）
+ * 支援「往左滑露出編輯與刪除按鈕」的交易列（配備三星 One UI 彈性物理彈簧動畫，滑動回彈超滑順）
  */
 @Composable
 fun SwipeableTransactionRow(
@@ -66,8 +71,20 @@ fun SwipeableTransactionRow(
 ) {
     val density = LocalDensity.current
     val actionWidthPx = with(density) { 132.dp.toPx() }
-    var dragOffset by remember(item.id, isOpen) {
-        mutableFloatStateOf(if (isOpen) -actionWidthPx else 0f)
+    val offsetX = remember { Animatable(if (isOpen) -actionWidthPx else 0f) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(isOpen) {
+        val target = if (isOpen) -actionWidthPx else 0f
+        if (offsetX.targetValue != target) {
+            offsetX.animateTo(
+                targetValue = target,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
+        }
     }
 
     val isIncome = item.type == "income"
@@ -92,7 +109,10 @@ fun SwipeableTransactionRow(
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary)
                     .clickable {
-                        onSwipeStateChange(null)
+                        scope.launch {
+                            offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                            onSwipeStateChange(null)
+                        }
                         onEdit(item)
                     },
                 contentAlignment = Alignment.Center,
@@ -108,7 +128,10 @@ fun SwipeableTransactionRow(
                     .fillMaxHeight()
                     .background(ExpenseCoralDark)
                     .clickable {
-                        onSwipeStateChange(null)
+                        scope.launch {
+                            offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                            onSwipeStateChange(null)
+                        }
                         onRequestDelete(item)
                     },
                 contentAlignment = Alignment.Center,
@@ -123,29 +146,45 @@ fun SwipeableTransactionRow(
         // 前景可拖曳列
         Row(
             modifier = Modifier
-                .offset { IntOffset(dragOffset.roundToInt(), 0) }
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .fillMaxWidth()
                 .fillMaxHeight()
                 .background(MaterialTheme.colorScheme.surface)
                 .pointerInput(item.id, actionWidthPx) {
                     detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (dragOffset < -actionWidthPx * 0.4f) {
-                                dragOffset = -actionWidthPx
-                                onSwipeStateChange(item.id)
-                            } else {
-                                dragOffset = 0f
-                                onSwipeStateChange(null)
+                        onHorizontalDrag = { _, dragAmount ->
+                            scope.launch {
+                                offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-actionWidthPx, 0f))
                             }
                         },
-                        onHorizontalDrag = { _, dragAmount ->
-                            dragOffset = (dragOffset + dragAmount).coerceIn(-actionWidthPx, 0f)
+                        onDragEnd = {
+                            scope.launch {
+                                val shouldOpen = offsetX.value < -actionWidthPx * 0.35f
+                                val target = if (shouldOpen) -actionWidthPx else 0f
+                                offsetX.animateTo(
+                                    targetValue = target,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMediumLow,
+                                    ),
+                                )
+                                onSwipeStateChange(if (shouldOpen) item.id else null)
+                            }
                         },
                     )
                 }
                 .clickable {
                     if (isOpen) {
-                        onSwipeStateChange(null)
+                        scope.launch {
+                            offsetX.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            )
+                            onSwipeStateChange(null)
+                        }
                     } else {
                         onEdit(item)
                     }
