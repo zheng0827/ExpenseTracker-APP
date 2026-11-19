@@ -84,6 +84,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val quickLaunchMode by viewModel.pendingQuickLaunch.collectAsState()
 
     var activeTab by remember { mutableStateOf("ledger") }
+    var statsInitialFilter by remember { mutableStateOf("all") }
     var showUnifiedSheet by remember { mutableStateOf(false) }
     var unifiedStartPhoto by remember { mutableStateOf(false) }
     var editingTx by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -173,6 +174,10 @@ fun MainScreen(viewModel: MainViewModel) {
                     onRequestDeleteTransaction = { pendingDeleteTx = it },
                     onApproveDuplicate = viewModel::approvePendingDuplicate,
                     onDismissDuplicate = viewModel::dismissPendingDuplicate,
+                    onNavigateToStats = { filterType ->
+                        statsInitialFilter = filterType
+                        activeTab = "stats"
+                    },
                 )
 
                 "stats" -> StatsScreen(
@@ -180,15 +185,9 @@ fun MainScreen(viewModel: MainViewModel) {
                     transactions = transactions,
                     creditCards = creditCards,
                     currency = currency,
+                    initialFilter = statsInitialFilter,
                     onShiftMonth = viewModel::shiftMonth,
                     onSelectMonth = viewModel::setYearMonth,
-                    onEditTransaction = { tx ->
-                        editingTx = tx
-                        prefillEntry = null
-                        unifiedStartPhoto = false
-                        showUnifiedSheet = true
-                    },
-                    onRequestDeleteTransaction = { pendingDeleteTx = it },
                 )
 
                 "plan" -> PlanScreen(

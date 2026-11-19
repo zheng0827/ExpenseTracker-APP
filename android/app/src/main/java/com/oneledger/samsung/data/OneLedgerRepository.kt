@@ -92,92 +92,17 @@ class OneLedgerRepository(
     val debtsFlow: Flow<List<DebtEntity>> = debtDao.observeAllActive()
 
     suspend fun ensureSeeded() {
-        if (prefs.seeded) return
-        val today = LocalDate.now()
-        val ym = YearMonth.from(today)
-        val curMonth = ym.toString()
+        // 使用者要求：清空所有預設假資料，App 開箱保持 100% 乾淨空白
+        clearSeedData()
+    }
 
-        val cards = listOf(
-            CreditCardEntity("card_cube", "國泰 CUBE", "小樹點", 0.3, 3.0, "餐飲,日常,交通", 3.0, 1.5),
-            CreditCardEntity("card_ubear", "玉山 U Bear", "現金折抵", 1.0, 3.0, "訂閱,購物,娛樂", 1.0, 1.5),
-            CreditCardEntity("card_gogo", "台新 @GoGo", "台新 Point", 0.5, 3.8, "餐飲,購物,日常", 2.0, 1.5),
-        )
-        cardDao.upsertAll(cards)
-
-        val seedTxs = listOf(
-            TransactionEntity(
-                id = "tx_seed_1", type = "expense", description = "招牌排骨便當",
-                amount = 120.0, category = "餐飲", paymentMethod = "現金",
-                date = today.toString(), time = "12:18",
-            ),
-            TransactionEntity(
-                id = "tx_seed_2", type = "expense", description = "星巴克，大杯冰拿鐵",
-                amount = 145.0, category = "餐飲", paymentMethod = "信用卡",
-                date = today.toString(), time = "09:12",
-                creditCardId = "card_cube", rewardPoints = 4.4, rewardUnit = "小樹點",
-            ),
-            TransactionEntity(
-                id = "tx_seed_3", type = "expense", description = "全聯，鮮乳、雞蛋",
-                amount = 248.0, category = "日常", paymentMethod = "信用卡",
-                date = today.minusDays(1).toString(), time = "19:40",
-                creditCardId = "card_cube", rewardPoints = 7.4, rewardUnit = "小樹點",
-            ),
-            TransactionEntity(
-                id = "tx_seed_4", type = "expense", description = "房租與管理費",
-                amount = 14500.0, category = "帳單", paymentMethod = "銀行轉帳",
-                date = ym.atDay(5).toString(), time = "10:00",
-            ),
-            TransactionEntity(
-                id = "tx_seed_5", type = "income", description = "本月薪資入帳",
-                amount = 52000.0, category = "薪資", paymentMethod = "銀行轉帳",
-                date = ym.atDay(5).toString(), time = "09:00",
-            ),
-            TransactionEntity(
-                id = "tx_seed_6", type = "expense", description = "Spotify Premium",
-                amount = 149.0, category = "訂閱", paymentMethod = "信用卡",
-                date = ym.atDay(5).toString(), time = "08:00", source = "recurring",
-                creditCardId = "card_ubear", rewardPoints = 4.5, rewardUnit = "現金折抵",
-            ),
-            // 上月資料（供切換月份與 6 個月折線圖呈現）
-            TransactionEntity(
-                id = "tx_prev_1", type = "income", description = "薪資入帳",
-                amount = 52000.0, category = "薪資", paymentMethod = "銀行轉帳",
-                date = ym.minusMonths(1).atDay(5).toString(), time = "09:00",
-            ),
-            TransactionEntity(
-                id = "tx_prev_2", type = "expense", description = "房租與日常開銷",
-                amount = 23800.0, category = "帳單", paymentMethod = "銀行轉帳",
-                date = ym.minusMonths(1).atDay(12).toString(), time = "12:00",
-            ),
-            TransactionEntity(
-                id = "tx_prev_3", type = "income", description = "薪資與獎金",
-                amount = 58000.0, category = "薪資", paymentMethod = "銀行轉帳",
-                date = ym.minusMonths(2).atDay(5).toString(), time = "09:00",
-            ),
-            TransactionEntity(
-                id = "tx_prev_4", type = "expense", description = "生活費與旅行",
-                amount = 28500.0, category = "娛樂", paymentMethod = "信用卡",
-                date = ym.minusMonths(2).atDay(18).toString(), time = "15:00",
-                creditCardId = "card_cube", rewardPoints = 85.5, rewardUnit = "小樹點",
-            ),
-        )
-        txDao.upsertAll(seedTxs)
-
-        val rules = listOf(
-            RecurringRuleEntity("rec_spotify", "Spotify Premium", "expense", 149.0, "訂閱", "信用卡", "card_ubear", "monthly", 5, true, curMonth),
-            RecurringRuleEntity("rec_yt", "YouTube Premium", "expense", 199.0, "訂閱", "信用卡", "card_ubear", "monthly", 12, true, ""),
-            RecurringRuleEntity("rec_gpt", "ChatGPT Plus", "expense", 650.0, "訂閱", "信用卡", "card_ubear", "monthly", 25, true, ""),
-            RecurringRuleEntity("rec_salary", "每月薪資入帳", "income", 52000.0, "薪資", "銀行轉帳", null, "monthly", 5, true, curMonth),
-        )
-        recDao.upsertAll(rules)
-
-        // 獨立借還款資料庫（debts.db）
-        val seedDebts = listOf(
-            DebtEntity("debt_seed_1", "lent", "阿明", 650.0, 0.0, "週五聚餐代墊", today.minusDays(1).toString(), today.plusDays(5).toString(), false),
-            DebtEntity("debt_seed_2", "borrowed", "小傑", 320.0, 0.0, "電影票代刷", today.minusDays(2).toString(), today.plusDays(3).toString(), false),
-        )
-        debtDao.upsertAll(seedDebts)
-
+    suspend fun clearSeedData() {
+        try {
+            txDao.deleteSeedTransactions()
+            recDao.deleteSeedRules()
+            cardDao.deleteSeedCards()
+            debtDao.deleteSeedDebts()
+        } catch (_: Exception) {}
         prefs.seeded = true
         refreshWidgets()
     }

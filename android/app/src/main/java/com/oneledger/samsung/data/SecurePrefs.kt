@@ -102,6 +102,10 @@ class SecurePrefs(context: Context) {
         get() = prefs.getBoolean(KEY_SEEDED, false)
         set(value) = prefs.edit().putBoolean(KEY_SEEDED, value).apply()
 
+    var widgetBackgroundStyle: String // "obsidian" | "amoled" | "glass" | "light"
+        get() = prefs.getString(KEY_WIDGET_BG, "obsidian") ?: "obsidian"
+        set(value) = prefs.edit().putString(KEY_WIDGET_BG, value).apply()
+
     fun getMonitoredAppList(): List<String> =
         monitoredAppsCsv.split(",", "，", "\n").map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -122,5 +126,6 @@ class SecurePrefs(context: Context) {
         private const val KEY_REMINDER_HOUR = "daily_reminder_hour"
         private const val KEY_REMINDER_MINUTE = "daily_reminder_minute"
         private const val KEY_SEEDED = "seeded_v1"
+        private const val KEY_WIDGET_BG = "widget_background_style"
     }
 }

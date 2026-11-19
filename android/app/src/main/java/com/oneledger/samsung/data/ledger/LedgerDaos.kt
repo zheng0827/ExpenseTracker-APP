@@ -31,6 +31,9 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET syncPending = 0 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    @Query("DELETE FROM transactions WHERE id LIKE 'tx_seed_%' OR id LIKE 'tx_prev_%'")
+    suspend fun deleteSeedTransactions()
 }
 
 @Dao
@@ -55,6 +58,9 @@ interface RecurringDao {
 
     @Query("UPDATE recurring_rules SET syncPending = 0 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    @Query("DELETE FROM recurring_rules WHERE id LIKE 'rec_%'")
+    suspend fun deleteSeedRules()
 }
 
 @Dao
@@ -82,6 +88,9 @@ interface CreditCardDao {
 
     @Query("UPDATE credit_cards SET syncPending = 0 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    @Query("DELETE FROM credit_cards WHERE id LIKE 'card_%'")
+    suspend fun deleteSeedCards()
 }
 
 @Dao

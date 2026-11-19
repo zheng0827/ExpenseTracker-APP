@@ -3,6 +3,8 @@ package com.oneledger.samsung.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +40,7 @@ import com.oneledger.samsung.ui.theme.ExpenseCoralDark
 import com.oneledger.samsung.ui.theme.IncomeGreenDark
 import java.time.YearMonth
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * 統計圖表 1：消費趨勢走勢圖（支援「每日」與「整月累計」切換）
@@ -48,6 +52,7 @@ fun SpendingTrendChartCard(
     currency: String,
 ) {
     var cumulativeMode by remember { mutableStateOf(false) }
+    var scrubDayIdx by remember { mutableStateOf<Int?>(null) }
     val daysCount = month.lengthOfMonth()
     val monthPrefix = month.toString()
 
@@ -86,7 +91,18 @@ fun SpendingTrendChartCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("消費趨勢走勢", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text("消費趨勢走勢", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (scrubDayIdx != null) {
+                        val sIdx = scrubDayIdx!!.coerceIn(0, series.size - 1)
+                        Text(
+                            text = "${month.monthValue}月${sIdx + 1}日：$currency ${"%,.0f".format(series[sIdx])}",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ExpenseCoralDark,
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(99.dp))
@@ -103,6 +119,29 @@ fun SpendingTrendChartCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(124.dp)
+                    .pointerInput(series.size) {
+                        detectTapGestures(
+                            onPress = { offset ->
+                                val w = size.width.coerceAtLeast(1)
+                                val idx = ((offset.x / w) * (series.size - 1)).roundToInt().coerceIn(0, series.size - 1)
+                                scrubDayIdx = idx
+                            }
+                        )
+                    }
+                    .pointerInput(series.size) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                val w = size.width.coerceAtLeast(1)
+                                val idx = ((offset.x / w) * (series.size - 1)).roundToInt().coerceIn(0, series.size - 1)
+                                scrubDayIdx = idx
+                            },
+                            onDrag = { change, _ ->
+                                val w = size.width.coerceAtLeast(1)
+                                val idx = ((change.position.x / w) * (series.size - 1)).roundToInt().coerceIn(0, series.size - 1)
+                                scrubDayIdx = idx
+                            }
+                        )
+                    }
             ) {
                 val w = size.width
                 val h = size.height
@@ -149,6 +188,28 @@ fun SpendingTrendChartCard(
                         pts.forEachIndexed { i, pt ->
                             if (series[i] > 0) drawCircle(color = ExpenseCoralDark, radius = 3.dp.toPx(), center = pt)
                         }
+                    }
+
+                    // 觸控滑動即時數值標記 (Touch Scrubber Line & Indicator)
+                    scrubDayIdx?.let { sIdx ->
+                        val safeIdx = sIdx.coerceIn(0, pts.size - 1)
+                        val targetPt = pts[safeIdx]
+                        drawLine(
+                            color = ExpenseCoralDark.copy(alpha = 0.65f),
+                            start = Offset(targetPt.x, topPad),
+                            end = Offset(targetPt.x, topPad + plotH),
+                            strokeWidth = 1.6.dp.toPx(),
+                        )
+                        drawCircle(
+                            color = ExpenseCoralDark.copy(alpha = 0.25f),
+                            radius = 7.dp.toPx(),
+                            center = targetPt,
+                        )
+                        drawCircle(
+                            color = ExpenseCoralDark,
+                            radius = 4.2.dp.toPx(),
+                            center = targetPt,
+                        )
                     }
                 }
             }
@@ -238,6 +299,32 @@ fun MonthlyBalanceLineChartCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(126.dp)
+                    .pointerInput(stats.size) {
+                        detectTapGestures(
+                            onPress = { offset ->
+                                val padX = 14.dp.toPx()
+                                val plotW = (size.width - padX * 2).coerceAtLeast(1f)
+                                val idx = (((offset.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
+                                focusIdx = idx
+                            }
+                        )
+                    }
+                    .pointerInput(stats.size) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                val padX = 14.dp.toPx()
+                                val plotW = (size.width - padX * 2).coerceAtLeast(1f)
+                                val idx = (((offset.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
+                                focusIdx = idx
+                            },
+                            onDrag = { change, _ ->
+                                val padX = 14.dp.toPx()
+                                val plotW = (size.width - padX * 2).coerceAtLeast(1f)
+                                val idx = (((change.position.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
+                                focusIdx = idx
+                            }
+                        )
+                    }
             ) {
                 val padX = 14.dp.toPx()
                 val plotW = size.width - padX * 2
@@ -251,6 +338,15 @@ fun MonthlyBalanceLineChartCard(
                     val y = topPad + plotH * r
                     drawLine(guideColor.copy(alpha = 0.4f), Offset(padX, y), Offset(size.width - padX, y), 1f)
                 }
+
+                // 繪製選中月份的垂直指標線
+                val focusedX = mapX(focusIdx)
+                drawLine(
+                    color = accent.copy(alpha = 0.45f),
+                    start = Offset(focusedX, topPad),
+                    end = Offset(focusedX, topPad + plotH),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
 
                 fun drawLineSeries(color: Color, selector: (Triple<Double, Double, Double>) -> Double) {
                     val path = Path()

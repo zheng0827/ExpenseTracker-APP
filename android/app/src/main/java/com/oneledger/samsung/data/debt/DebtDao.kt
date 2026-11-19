@@ -28,4 +28,7 @@ interface DebtDao {
 
     @Query("UPDATE debts SET syncPending = 0 WHERE id IN (:ids)")
     suspend fun markSynced(ids: List<String>)
+
+    @Query("DELETE FROM debts WHERE id LIKE 'debt_seed_%'")
+    suspend fun deleteSeedDebts()
 }

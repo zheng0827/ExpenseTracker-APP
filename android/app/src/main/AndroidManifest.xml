@@ -32,6 +32,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 桌面小工具快速記帳浮動視窗 (Transparent Dialog Activity) -->
+        <activity
+            android:name="com.oneledger.samsung.QuickCaptureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.OneLedger.TransparentDialog"
+            android:windowSoftInputMode="adjustResize" />
+
         <!-- 原生 Android 通知監聽服務（攔截銀行／支付通知 → 本地遮蔽卡號後四碼 → LLM 解析入帳） -->
         <service
             android:name="com.oneledger.samsung.service.ExpenseNotificationListenerService"

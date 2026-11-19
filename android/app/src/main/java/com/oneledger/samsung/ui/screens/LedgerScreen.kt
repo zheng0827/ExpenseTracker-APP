@@ -72,6 +72,7 @@ fun LedgerScreen(
     onRequestDeleteTransaction: (TransactionEntity) -> Unit,
     onApproveDuplicate: (PendingDuplicateEntity) -> Unit,
     onDismissDuplicate: (String) -> Unit,
+    onNavigateToStats: ((String) -> Unit)? = null,
 ) {
     var swipedId by remember { mutableStateOf<String?>(null) }
     val monthPrefix = selectedMonth.toString()
@@ -138,7 +139,12 @@ fun LedgerScreen(
 
         // Donut Income / Expense / Balance Card
         item {
-            DonutBalanceCard(income = income, expense = expense, currency = currency)
+            DonutBalanceCard(
+                income = income,
+                expense = expense,
+                currency = currency,
+                onNavigateToStats = onNavigateToStats,
+            )
         }
 
         // 待確認疑似重複通知（避免誤殺同金額的兩筆獨立消費！）

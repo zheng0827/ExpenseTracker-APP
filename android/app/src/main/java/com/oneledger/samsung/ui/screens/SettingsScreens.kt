@@ -2,6 +2,7 @@ package com.oneledger.samsung.ui.screens
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -99,6 +100,10 @@ fun SettingsFlowScreen(
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.HOME) }
 
+    BackHandler(enabled = currentPage != SettingsPage.HOME) {
+        currentPage = SettingsPage.HOME
+    }
+
     when (currentPage) {
         SettingsPage.HOME -> SettingsHomeList(
             prefs = prefs,
@@ -144,12 +149,14 @@ fun SettingsFlowScreen(
         )
 
         SettingsPage.APPEARANCE_EXPORT -> AppearanceExportSubScreen(
+            prefs = prefs,
             themeMode = themeMode,
             currency = currency,
             transactions = transactions,
             onBack = { currentPage = SettingsPage.HOME },
             onChangeTheme = onChangeTheme,
             onChangeCurrency = onChangeCurrency,
+            onShowToast = onShowToast,
         )
     }
 }
@@ -729,14 +736,17 @@ private fun ReminderSubScreen(
 
 @Composable
 private fun AppearanceExportSubScreen(
+    prefs: SecurePrefs,
     themeMode: String,
     currency: String,
     transactions: List<TransactionEntity>,
     onBack: () -> Unit,
     onChangeTheme: (String) -> Unit,
     onChangeCurrency: (String) -> Unit,
+    onShowToast: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    var currentWidgetBg by remember { mutableStateOf(prefs.widgetBackgroundStyle) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -769,6 +779,40 @@ private fun AppearanceExportSubScreen(
                     }
 
                     Spacer(Modifier.height(4.dp))
+                    Text("桌面小工具底色風格", fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "obsidian" to "曜石深黑",
+                            "amoled" to "極致純黑",
+                            "glass" to "毛玻璃",
+                            "light" to "簡約淺白",
+                        ).forEach { (k, lbl) ->
+                            val active = currentWidgetBg == k
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable {
+                                        currentWidgetBg = k
+                                        prefs.widgetBackgroundStyle = k
+                                        onShowToast("已套用小工具外觀：$lbl")
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    lbl,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.5.sp,
+                                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
                     Text("貨幣符號", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("NT$", "¥", "$", "HK$").forEach { cur ->
@@ -794,7 +838,9 @@ private fun AppearanceExportSubScreen(
                         onClick = {
                             val header = "日期,時間,類型,描述,分類,金額,支付方式,回饋點數"
                             val rows = transactions.joinToString("\n") { tx ->
-                                "${tx.date},${tx.time},${if (tx.type == "income") "收入" else "支出"},\"${tx.description.replace("\"", "\"\"")}\",${tx.category},${tx.amount},${tx.paymentMethod},${tx.rewardPoints}"
+                                val typeStr = if (tx.type == "income") "收入" else "支出"
+                                val safeDesc = tx.description.replace(",", " ")
+                                "${tx.date},${tx.time},$typeStr,$safeDesc,${tx.category},${tx.amount},${tx.paymentMethod},${tx.rewardPoints}"
                             }
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/csv"
