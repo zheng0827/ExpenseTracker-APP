@@ -32,21 +32,28 @@ jobs:
           set -o pipefail
           gradle assembleDebug --stacktrace 2>&1 | tee build.log
 
-      - name: Report Build Error
-        if: failure()
+      - name: Report Build Diagnostics
+        if: always()
         run: |
-          echo "## ❌ Build Debug APK Failed" >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          tail -n 120 build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Report Build Success
-        if: success()
-        run: |
-          echo "## ✅ Build Debug APK Succeeded" >> $GITHUB_STEP_SUMMARY
-          echo "Samsung One UI OneLedger APK was successfully compiled and packaged." >> $GITHUB_STEP_SUMMARY
+          python3 -c "
+          import os
+          if os.path.exists('build.log'):
+              with open('build.log', 'r', encoding='utf-8', errors='ignore') as f:
+                  lines = f.readlines()
+              err_count = 0
+              for line in lines:
+                  stripped = line.strip()
+                  if any(k in stripped for k in ['e: ', 'AAPT: ', 'FAILURE:', 'Caused by:', 'Compilation error', 'Unresolved reference']):
+                      print(f'::error title=Gradle Error::{stripped}')
+                      err_count += 1
+                      if err_count >= 50:
+                          break
+              for line in lines[-35:]:
+                  print(f'::notice title=Log Tail::{line.strip()}')
+          "
 
       - name: Upload APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: OneLedger-Samsung-APK
