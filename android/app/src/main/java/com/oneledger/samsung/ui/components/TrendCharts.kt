@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -265,6 +266,8 @@ fun MonthlyBalanceLineChartCard(
     val accent = MaterialTheme.colorScheme.primary
     val guideColor = MaterialTheme.colorScheme.outline
     val focused = stats.getOrElse(focusIdx) { Triple(0.0, 0.0, 0.0) }
+    val density = LocalDensity.current
+    val padX = with(density) { 14.dp.toPx() }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -302,7 +305,6 @@ fun MonthlyBalanceLineChartCard(
                     .pointerInput(stats.size) {
                         detectTapGestures(
                             onPress = { offset ->
-                                val padX = 14.dp.toPx()
                                 val plotW = (size.width - padX * 2).coerceAtLeast(1f)
                                 val idx = (((offset.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
                                 focusIdx = idx
@@ -312,13 +314,11 @@ fun MonthlyBalanceLineChartCard(
                     .pointerInput(stats.size) {
                         detectDragGestures(
                             onDragStart = { offset ->
-                                val padX = 14.dp.toPx()
                                 val plotW = (size.width - padX * 2).coerceAtLeast(1f)
                                 val idx = (((offset.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
                                 focusIdx = idx
                             },
                             onDrag = { change, _ ->
-                                val padX = 14.dp.toPx()
                                 val plotW = (size.width - padX * 2).coerceAtLeast(1f)
                                 val idx = (((change.position.x - padX) / plotW) * (stats.size - 1)).roundToInt().coerceIn(0, stats.size - 1)
                                 focusIdx = idx
