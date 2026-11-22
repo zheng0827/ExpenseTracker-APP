@@ -25,6 +25,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -113,7 +114,7 @@ import java.time.ZoneId
  * - 信用卡回饋選擇與海外 1.5% 淨回饋試算
  * - 嚴格等高（308.dp）底部區域：計算機 與 CameraX 下半屏拍照／結果切換零高度跳動
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun UnifiedEntrySheet(
     startWithPhoto: Boolean,
@@ -845,7 +846,7 @@ private fun LowerHalfCameraPanel(
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalArrangement = Arrangement.Center,
                         modifier = Modifier
                             .fillMaxSize()
                             .clickable {
