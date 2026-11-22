@@ -4,10 +4,12 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
@@ -25,17 +27,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.Calculate
@@ -44,6 +51,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
@@ -72,8 +80,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -176,6 +187,10 @@ fun UnifiedEntrySheet(
     val computedAmount = CalcEvaluator.evaluate(expr)
     val hasOperator = expr.any { it in listOf('+', '-', '×', '÷') }
     val catList = if (txType == "income") Categories.incomeList else Categories.expenseList
+    val canSave = computedAmount != null && computedAmount > 0
+    val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+    val isKeyboardOpen = WindowInsets.isImeVisible || WindowInsets.ime.getBottom(density) > 0
 
     fun submit() {
         val amt = computedAmount ?: return
@@ -340,6 +355,8 @@ fun UnifiedEntrySheet(
                     placeholder = { Text("阿美自助餐，漢堡、蛋餅...", fontSize = 13.5.sp) },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.weight(1f),
                 )
                 val today = LocalDate.now().toString()
@@ -474,51 +491,123 @@ fun UnifiedEntrySheet(
 
             Spacer(Modifier.height(6.dp))
 
-            // STRICTLY FIXED-HEIGHT (308.dp) LOWER WORKSPACE: Calculator <-> CameraX Photo Result
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(308.dp),
-            ) {
-                if (lowerMode == "calc") {
-                    BuiltInCalculatorPad(
-                        onKey = { key ->
-                            expr = when (key) {
-                                "C" -> ""
-                                "BACK" -> expr.dropLast(1)
-                                "=" -> CalcEvaluator.evaluate(expr)?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: expr
-                                "+", "-", "×", "÷" -> when {
-                                    expr.isEmpty() -> ""
-                                    expr.last() in listOf('+', '-', '×', '÷') -> expr.dropLast(1) + key
-                                    else -> expr + key
+            if (isKeyboardOpen) {
+                // 當鍵盤彈起時，直接由虛擬鍵盤取代計算機／拍照區域，避免計算機被往上擠壓變形
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clickable {
+                                focusManager.clearFocus()
+                            },
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Calculate,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "開啟計算機",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clickable(
+                                enabled = canSave,
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    submit()
+                                },
+                            ),
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (editingItem != null) "儲存變更" else "確認儲存",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+            } else {
+                // 鍵盤收起時：常駐固定 308.dp 下半部工作區（計算機 <-> 相機拍照／相簿照片檢視）
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(308.dp),
+                ) {
+                    if (lowerMode == "calc") {
+                        BuiltInCalculatorPad(
+                            onKey = { key ->
+                                expr = when (key) {
+                                    "C" -> ""
+                                    "BACK" -> expr.dropLast(1)
+                                    "=" -> CalcEvaluator.evaluate(expr)?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: expr
+                                    "+", "-", "×", "÷" -> when {
+                                        expr.isEmpty() -> ""
+                                        expr.last() in listOf('+', '-', '×', '÷') -> expr.dropLast(1) + key
+                                        else -> expr + key
+                                    }
+                                    "." -> {
+                                        val lastNum = expr.split('+', '-', '×', '÷').lastOrNull() ?: ""
+                                        if (lastNum.contains(".")) expr else if (lastNum.isEmpty()) "${expr}0." else "$expr."
+                                    }
+                                    else -> if (expr == "0") key else expr + key
                                 }
-                                "." -> {
-                                    val lastNum = expr.split('+', '-', '×', '÷').lastOrNull() ?: ""
-                                    if (lastNum.contains(".")) expr else if (lastNum.isEmpty()) "${expr}0." else "$expr."
-                                }
-                                else -> if (expr == "0") key else expr + key
-                            }
-                        },
-                        canSave = computedAmount != null && computedAmount > 0,
-                        saveLabel = if (editingItem != null) "儲存變更" else "儲存",
-                        onSave = ::submit,
-                    )
-                } else {
-                    LowerHalfCameraPanel(
-                        mode = lowerMode,
-                        photoUri = photoUri,
-                        canSave = computedAmount != null && computedAmount > 0,
-                        onSwitchMode = { lowerMode = it },
-                        onPhotoCaptured = { path ->
-                            photoUri = path
-                            lowerMode = "result"
-                        },
-                        onRemovePhoto = {
-                            photoUri = null
-                            lowerMode = "camera"
-                        },
-                        onSave = ::submit,
-                    )
+                            },
+                            canSave = computedAmount != null && computedAmount > 0,
+                            saveLabel = if (editingItem != null) "儲存變更" else "儲存",
+                            onSave = ::submit,
+                        )
+                    } else {
+                        LowerHalfCameraPanel(
+                            mode = lowerMode,
+                            photoUri = photoUri,
+                            canSave = computedAmount != null && computedAmount > 0,
+                            onSwitchMode = { lowerMode = it },
+                            onPhotoCaptured = { path ->
+                                photoUri = path
+                                lowerMode = "result"
+                            },
+                            onRemovePhoto = {
+                                photoUri = null
+                                lowerMode = "camera"
+                            },
+                            onSave = ::submit,
+                        )
+                    }
                 }
             }
         }
@@ -641,7 +730,7 @@ private fun BuiltInCalculatorPad(
 }
 
 /**
- * 拍照區塊：左側 1:1 照片/取景預覽，右側直排控制按鈕（即時取景/拍照結果、垃圾桶、確認儲存）
+ * 拍照區塊：左側 1:1 照片/取景預覽，右側直排控制按鈕（即時取景/拍照結果、相簿選取、快門拍攝、垃圾桶、確認儲存）
  */
 @Composable
 private fun LowerHalfCameraPanel(
@@ -663,6 +752,15 @@ private fun LowerHalfCameraPanel(
     }
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasCameraPermission = granted
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val localPath = copyUriToAppStorage(context, uri)
+            onPhotoCaptured(localPath)
+            onSwitchMode("result")
+        }
     }
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -740,27 +838,37 @@ private fun LowerHalfCameraPanel(
                 if (photoUri != null) {
                     AsyncImage(
                         model = photoUri,
-                        contentDescription = "已拍攝的消費照片",
+                        contentDescription = "已選取的消費單據照片",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(8.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                galleryLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .padding(10.dp)
                     ) {
                         Icon(
-                            Icons.Rounded.CameraAlt,
+                            Icons.Rounded.PhotoLibrary,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(28.dp)
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(32.dp)
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "尚未拍攝照片\n請切換至「即時取景」",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 11.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            "點此從相簿選取照片\n或切換至即時取景",
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 11.5.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            lineHeight = 16.sp,
                         )
                     }
                 }
@@ -783,7 +891,7 @@ private fun LowerHalfCameraPanel(
                     .padding(3.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                listOf("camera" to "即時取景", "result" to "拍照結果").forEach { (k, label) ->
+                listOf("camera" to "即時取景", "result" to "照片檢視").forEach { (k, label) ->
                     val active = mode == k
                     Box(
                         modifier = Modifier
@@ -807,17 +915,18 @@ private fun LowerHalfCameraPanel(
                 }
             }
 
-            // 中間：相機快門按鈕 或 刪除照片垃圾桶按鈕
+            // 中間：相機快門按鈕、相簿選取匯入按鈕、刪除照片按鈕
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 if (mode == "camera") {
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(46.dp)
                             .border(3.dp, Color.White, CircleShape)
-                            .padding(4.dp)
+                            .padding(3.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .clickable {
@@ -832,33 +941,73 @@ private fun LowerHalfCameraPanel(
                     ) {
                         Icon(
                             Icons.Rounded.CameraAlt,
-                            contentDescription = "拍照",
+                            contentDescription = "快門拍攝",
                             tint = Color(0xFF111318),
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-                    Text("快門拍攝", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
-                } else {
-                    if (photoUri != null) {
-                        IconButton(
-                            onClick = {
+                    Text("快門拍攝", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.85f))
+                }
+
+                // 相簿匯入按鈕（不論在即時取景或照片檢視下皆可直接點選開啟相簿）
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.16f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            galleryLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.PhotoLibrary,
+                            contentDescription = "從相簿選取",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = if (photoUri != null && mode == "result") "重選相簿" else "相簿選取",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                    }
+                }
+
+                if (mode == "result" && photoUri != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = ExpenseCoralDark.copy(alpha = 0.18f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                 onRemovePhoto()
                             },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(ExpenseCoralDark.copy(alpha = 0.2f), CircleShape)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
                         ) {
                             Icon(
                                 Icons.Rounded.Delete,
                                 contentDescription = "刪除照片",
                                 tint = ExpenseCoralDark,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(15.dp)
                             )
+                            Spacer(Modifier.width(4.dp))
+                            Text("刪除照片", fontSize = 11.sp, color = ExpenseCoralDark, fontWeight = FontWeight.SemiBold)
                         }
-                        Text("刪除照片", fontSize = 11.sp, color = ExpenseCoralDark)
-                    } else {
-                        Spacer(Modifier.height(44.dp))
                     }
                 }
             }
@@ -869,7 +1018,7 @@ private fun LowerHalfCameraPanel(
                 color = if (canSave) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(42.dp)
+                    .height(40.dp)
                     .clickable(
                         enabled = canSave,
                         onClick = {
@@ -882,7 +1031,7 @@ private fun LowerHalfCameraPanel(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("確認儲存", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
@@ -891,51 +1040,64 @@ private fun LowerHalfCameraPanel(
     }
 }
 
+/**
+ * 將從相簿（Photo Picker / Gallery）選取之 content:// Uri 永久拷貝至 App 沙盒內部儲存空間，
+ * 確保離線永久讀取且絕不受 Uri 權限過期影響。
+ */
+private fun copyUriToAppStorage(context: Context, sourceUri: Uri): String {
+    return try {
+        val dir = File(context.filesDir, "photos").apply { mkdirs() }
+        val destFile = File(dir, "tx_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            destFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        destFile.absolutePath
+    } catch (_: Exception) {
+        sourceUri.toString()
+    }
+}
+
+/**
+ * 拍照時優先儲存於 App 專屬沙盒，並同步拷貝一份至系統 Pictures/OneLedger 相簿
+ */
 private fun takeLocalPhoto(
     context: Context,
     imageCapture: ImageCapture,
     onSaved: (String) -> Unit,
 ) {
-    val contentValues = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, "OneLedger_${System.currentTimeMillis()}.jpg")
-        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/OneLedger")
-        }
-    }
-    val outputOptions = ImageCapture.OutputFileOptions.Builder(
-        context.contentResolver,
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        contentValues
-    ).build()
+    val dir = File(context.filesDir, "photos").apply { mkdirs() }
+    val localFile = File(dir, "tx_${System.currentTimeMillis()}.jpg")
+    val options = ImageCapture.OutputFileOptions.Builder(localFile).build()
 
     imageCapture.takePicture(
-        outputOptions,
+        options,
         ContextCompat.getMainExecutor(context),
         object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                val uriStr = outputFileResults.savedUri?.toString()
-                if (uriStr != null) {
-                    onSaved(uriStr)
-                }
+                // 同步寫入系統相簿 (Pictures/OneLedger) 方便使用者於手機相簿直接檢視
+                try {
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, "OneLedger_${System.currentTimeMillis()}.jpg")
+                        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/OneLedger")
+                        }
+                    }
+                    val mediaUri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                    if (mediaUri != null) {
+                        context.contentResolver.openOutputStream(mediaUri)?.use { out ->
+                            localFile.inputStream().use { inp -> inp.copyTo(out) }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                onSaved(localFile.absolutePath)
             }
 
             override fun onError(exception: ImageCaptureException) {
-                try {
-                    val dir = File(context.filesDir, "photos").apply { mkdirs() }
-                    val fallbackFile = File(dir, "tx_${System.currentTimeMillis()}.jpg")
-                    val fallbackOptions = ImageCapture.OutputFileOptions.Builder(fallbackFile).build()
-                    imageCapture.takePicture(
-                        fallbackOptions,
-                        ContextCompat.getMainExecutor(context),
-                        object : ImageCapture.OnImageSavedCallback {
-                            override fun onImageSaved(res: ImageCapture.OutputFileResults) {
-                                onSaved(fallbackFile.absolutePath)
-                            }
-                            override fun onError(e: ImageCaptureException) {}
-                        }
-                    )
-                } catch (_: Exception) {}
+                // Fallback
             }
         },
     )

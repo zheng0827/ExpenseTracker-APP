@@ -202,10 +202,12 @@ fun SwipeableTransactionRow(
             ) {
                 if (!item.photoUri.isNullOrBlank()) {
                     AsyncImage(
-                        model = File(item.photoUri),
+                        model = item.photoUri,
                         contentDescription = item.description,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp)),
                     )
                 } else {
                     Icon(catInfo.icon, contentDescription = item.category, tint = catInfo.color, modifier = Modifier.size(20.dp))
